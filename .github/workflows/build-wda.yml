@@ -1,0 +1,60 @@
+name: Build WebDriverAgent (unsigned ipa)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Clone WebDriverAgent
+        run: git clone --depth 1 https://github.com/appium/WebDriverAgent.git wda
+
+      - name: Build for testing (no signing)
+        run: |
+          cd wda
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project WebDriverAgent.xcodeproj \
+            -scheme WebDriverAgentRunner \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ../dd \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            | tail -40
+
+      - name: Package into ipa (strip dSYM)
+        run: |
+          set -e
+          APP=$(find dd/Build/Products -name "WebDriverAgentRunner-Runner.app" -maxdepth 4 | head -1)
+          echo "APP=$APP"
+          test -n "$APP"
+          mkdir -p out/Payload
+          cp -R "$APP" out/Payload/
+          find out/Payload -name "*.dSYM" -type d -prune -exec rm -rf {} + || true
+          cd out
+          zip -qr ../WebDriverAgentRunner-unsigned.ipa Payload
+          cd ..
+          ls -lh WebDriverAgentRunner-unsigned.ipa
+          unzip -l WebDriverAgentRunner-unsigned.ipa | head -20
+
+      - name: Read min OS / SDK of the built app
+        run: |
+          PL=$(find out/Payload -name Info.plist -maxdepth 3 | head -1)
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Print :DTSDKName" "$PL" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wda-unsigned-ipa
+          path: WebDriverAgentRunner-unsigned.ipa
+          if-no-files-found: error
