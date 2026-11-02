@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - name: Show toolchain
         run: |
@@ -58,3 +58,4 @@ jobs:
           name: wda-unsigned-ipa
           path: WebDriverAgentRunner-unsigned.ipa
           if-no-files-found: error
+
